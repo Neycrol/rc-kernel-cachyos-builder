@@ -62,7 +62,21 @@ src_install() {
 
 pkg_postinst() {
   elog "Kernel installed under /boot and /lib/modules."
-  elog "Update your bootloader entry (systemd-boot) and initramfs if needed."
+
+  if command -v kernel-install >/dev/null 2>&1; then
+    local moddir
+    for moddir in /lib/modules/*-cachyos-rc; do
+      [[ -d "${moddir}" ]] || continue
+      local krel="${moddir##*/}"
+      local image="/boot/vmlinuz-${krel}"
+      if [[ -f "${image}" ]]; then
+        einfo "Running kernel-install add ${krel}"
+        kernel-install add "${krel}" "${image}" || ewarn "kernel-install add failed for ${krel}"
+      fi
+    done
+  else
+    ewarn "kernel-install not found; run 'kernel-install add <version> <vmlinuz>' manually."
+  fi
 }
 EBUILD
 

@@ -28,6 +28,22 @@ apply_url() {
   patch -p1 --forward < "${patch_file}"
 }
 
+apply_url_allow_applied() {
+  local url="$1"
+  local name="$2"
+  local patch_file="${tmp_dir}/${name}.patch"
+
+  echo "Applying ${name}"
+  curl -fsSL "${url}" -o "${patch_file}"
+
+  if patch -p1 --reverse --dry-run < "${patch_file}" >/dev/null 2>&1; then
+    echo "Patch ${name} already applied, skipping."
+    return 0
+  fi
+
+  patch -p1 --forward < "${patch_file}"
+}
+
 resolve_patch_url() {
   local path="$1"
   shift
@@ -114,4 +130,4 @@ if [[ -z "${bbr_url}" ]]; then
 fi
 
 echo "Resolved bbr3 -> ${bbr_url}"
-apply_url "${bbr_url}" "bbr3"
+apply_url_allow_applied "${bbr_url}" "bbr3"

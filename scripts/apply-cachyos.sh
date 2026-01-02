@@ -24,30 +24,94 @@ apply_url() {
   local patch_file="${tmp_dir}/${name}.patch"
 
   echo "Applying ${name}"
-  curl -fsSL "${url}" -o "${patch_file}" || return 1
-  patch -p1 --forward < "${patch_file}" || return 1
+  curl -fsSL "${url}" -o "${patch_file}"
+  patch -p1 --forward < "${patch_file}"
 }
 
-base_repo="https://raw.githubusercontent.com/CachyOS/kernel-patches/master/${major}"
+resolve_patch_url() {
+  local path="$1"
+  shift
 
-apply_url "${base_repo}/all/0001-cachyos-base-all.patch" "cachyos-base"
+  python3 - "$path" "$@" <<'PY'
+import json
+import os
+import re
+import sys
+import urllib.request
 
-if ! apply_url "${base_repo}/sched/0001-bore-cachy.patch" "bore-sched"; then
-  apply_url "${base_repo}/sched/0001-bore.patch" "bore-sched"
+path = sys.argv[1]
+patterns = sys.argv[2:]
+url = f"https://api.github.com/repos/CachyOS/kernel-patches/contents/{path}"
+req = urllib.request.Request(url, headers={"User-Agent": "rc-kernel-cachyos-builder"})
+token = os.environ.get("GITHUB_TOKEN")
+if token:
+    req.add_header("Authorization", f"token {token}")
+try:
+    with urllib.request.urlopen(req) as resp:
+        data = json.load(resp)
+except Exception as exc:
+    print(f"Failed to query {url}: {exc}", file=sys.stderr)
+    sys.exit(2)
+
+files = [item for item in data if item.get("type") == "file"]
+for pat in patterns:
+    rx = re.compile(pat)
+    for item in files:
+        name = item.get("name", "")
+        if rx.search(name):
+            print(item.get("download_url", ""))
+            sys.exit(0)
+
+sys.exit(1)
+PY
+}
+
+require_patch_url() {
+  local path="$1"
+  local name="$2"
+  shift 2
+
+  local url
+  if ! url="$(resolve_patch_url "${path}" "$@")"; then
+    local rc=$?
+    if [[ ${rc} -eq 2 ]]; then
+      echo "Failed to query patch list at ${path}" >&2
+    else
+      echo "No patch matched in ${path} for patterns: $*" >&2
+    fi
+    exit 1
+  fi
+
+  if [[ -z "${url}" ]]; then
+    echo "Empty download URL resolved for ${name}" >&2
+    exit 1
+  fi
+
+  echo "Resolved ${name} -> ${url}"
+  apply_url "${url}" "${name}"
+}
+
+require_patch_url "${major}/all" "cachyos-base" 'cachyos-base.*\.patch$'
+
+if ! require_patch_url "${major}/sched" "bore-sched" 'bore-cachy.*\.patch$' 'bore.*\.patch$'; then
+  exit 1
 fi
 
-bbr_patch=""
-for candidate in 0003-bbr3.patch 0004-bbr3.patch 0005-bbr3.patch; do
-  url="${base_repo}/${candidate}"
-  if curl -fsSL "${url}" -o "${tmp_dir}/${candidate}"; then
-    bbr_patch="${tmp_dir}/${candidate}"
-    echo "Found BBRv3 patch: ${candidate}"
-    patch -p1 --forward < "${bbr_patch}"
+bbr_url=""
+for path in "${major}" "${major}/misc"; do
+  if bbr_url="$(resolve_patch_url "${path}" 'bbr3.*\.patch$')"; then
     break
+  fi
+  if [[ $? -eq 2 ]]; then
+    echo "Failed to query patch list at ${path}" >&2
+    exit 1
   fi
 done
 
-if [[ -z "${bbr_patch}" ]]; then
+if [[ -z "${bbr_url}" ]]; then
   echo "BBRv3 patch not found for ${major}." >&2
   exit 1
 fi
+
+echo "Resolved bbr3 -> ${bbr_url}"
+apply_url "${bbr_url}" "bbr3"

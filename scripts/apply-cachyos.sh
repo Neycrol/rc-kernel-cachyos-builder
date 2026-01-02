@@ -24,16 +24,21 @@ apply_url() {
   local patch_file="${tmp_dir}/${name}.patch"
 
   echo "Applying ${name}"
-  curl -fsSL "${url}" -o "${patch_file}"
-  patch -p1 --forward < "${patch_file}"
+  curl -fsSL "${url}" -o "${patch_file}" || return 1
+  patch -p1 --forward < "${patch_file}" || return 1
 }
 
-apply_url "https://raw.githubusercontent.com/CachyOS/kernel-patches/master/all/0001-cachyos-base-all.patch" "cachyos-base"
-apply_url "https://raw.githubusercontent.com/CachyOS/kernel-patches/master/sched/0001-bore-cachy.patch" "bore-sched"
+base_repo="https://raw.githubusercontent.com/CachyOS/kernel-patches/master/${major}"
+
+apply_url "${base_repo}/all/0001-cachyos-base-all.patch" "cachyos-base"
+
+if ! apply_url "${base_repo}/sched/0001-bore-cachy.patch" "bore-sched"; then
+  apply_url "${base_repo}/sched/0001-bore.patch" "bore-sched"
+fi
 
 bbr_patch=""
 for candidate in 0003-bbr3.patch 0004-bbr3.patch 0005-bbr3.patch; do
-  url="https://raw.githubusercontent.com/CachyOS/kernel-patches/master/${major}/${candidate}"
+  url="${base_repo}/${candidate}"
   if curl -fsSL "${url}" -o "${tmp_dir}/${candidate}"; then
     bbr_patch="${tmp_dir}/${candidate}"
     echo "Found BBRv3 patch: ${candidate}"

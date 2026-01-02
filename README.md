@@ -14,7 +14,8 @@ Nightly GitHub Actions builder for Linux mainline RC kernels with CachyOS patche
 
 ## Optional base config
 If you want to seed the build with a known-good config, add `configs/base.config` to the repo.
-The workflow will auto-detect it. Otherwise, it uses `make defconfig`.
+If it is split into `configs/base.config.d/part-*`, the build script will reassemble it.
+Otherwise, it uses `make defconfig`.
 
 ## Notes
 - CPU instruction tuning is set via `MARCH_FLAGS` in the workflow.

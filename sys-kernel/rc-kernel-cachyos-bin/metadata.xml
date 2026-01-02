@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+  <maintainer type="person">
+    <email>you@example.com</email>
+    <name>rc-kernel-cachyos overlay</name>
+  </maintainer>
+  <longdescription>
+    Binary CachyOS-patched mainline RC kernel built via GitHub Actions.
+  </longdescription>
+</pkgmetadata>

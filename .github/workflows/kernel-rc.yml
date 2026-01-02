@@ -9,6 +9,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    permissions:
+      contents: write
     env:
       MARCH_FLAGS: "-march=icelake-client -mtune=icelake-client"
       LOCALVERSION: "-cachyos-rc"
@@ -39,6 +41,16 @@ jobs:
       - name: Build kernel
         run: |
           bash scripts/build.sh "${{ steps.rc.outputs.rc_version }}" "${{ steps.rc.outputs.rc_major }}"
+
+      - name: Publish release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: rc-${{ steps.rc.outputs.rc_version }}
+          name: rc-${{ steps.rc.outputs.rc_version }}
+          prerelease: true
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: artifacts/linux-${{ steps.rc.outputs.rc_version }}${{ env.LOCALVERSION }}.tar.zst
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

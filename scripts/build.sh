@@ -51,4 +51,17 @@ cp System.map "${out}/System.map"
 cp .config "${out}/config"
 cp vmlinux "${out}/vmlinux"
 
+make -s kernelrelease LOCALVERSION="${local_version}" > "${out}/kernel-release"
 tar -I 'zstd -T0 -19' -cf "${out}/modules.tar.zst" -C "${workdir}/modules" .
+
+bundle_dir="${out}/linux-${rc_version}${local_version}"
+mkdir -p "${bundle_dir}/boot" "${bundle_dir}/lib"
+kver="$(cat "${out}/kernel-release")"
+cp "${out}/bzImage" "${bundle_dir}/boot/vmlinuz-${kver}"
+cp "${out}/System.map" "${bundle_dir}/boot/System.map-${kver}"
+cp "${out}/config" "${bundle_dir}/boot/config-${kver}"
+cp "${out}/vmlinux" "${bundle_dir}/boot/vmlinux-${kver}"
+cp "${out}/kernel-release" "${bundle_dir}/boot/kernel-release-${kver}"
+cp -a "${workdir}/modules/lib" "${bundle_dir}/lib"
+
+tar -I 'zstd -T0 -19' -cf "${out}/linux-${rc_version}${local_version}.tar.zst" -C "${out}" "linux-${rc_version}${local_version}"

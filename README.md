@@ -11,6 +11,19 @@ Nightly GitHub Actions builder for Linux mainline RC kernels with CachyOS patche
 ## Artifacts
 - `bzImage`, `vmlinux`, `System.map`, `.config`
 - `modules.tar.zst`
+- `linux-<rc_version>-cachyos-rc.tar.zst` (bundle with `/boot` + `/lib/modules`)
+
+## Gentoo overlay usage
+This repo doubles as a simple overlay that installs the bundled kernel.
+
+```bash
+eselect repository add rc-kernel-cachyos git https://github.com/Neycrol/rc-kernel-cachyos-builder
+emaint sync -r rc-kernel-cachyos
+ebuild sys-kernel/rc-kernel-cachyos-bin/rc-kernel-cachyos-bin-6.19_rc3.ebuild manifest
+emerge -av =sys-kernel/rc-kernel-cachyos-bin-6.19_rc3
+```
+
+Then add a systemd-boot entry for the new `/boot/vmlinuz-<kver>` and reboot.
 
 ## Optional base config
 If you want to seed the build with a known-good config, add `configs/base.config` to the repo.

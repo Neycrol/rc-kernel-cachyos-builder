@@ -52,6 +52,17 @@ jobs:
           replacesArtifacts: true
           artifacts: artifacts/linux-${{ steps.rc.outputs.rc_version }}${{ env.LOCALVERSION }}.tar.zst
 
+      - name: Update ebuild
+        run: |
+          bash scripts/update-ebuild.sh "${{ steps.rc.outputs.rc_version }}"
+          if git status --porcelain | grep -q .; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add sys-kernel/rc-kernel-cachyos-bin
+            git commit -m "Add ebuild for ${{ steps.rc.outputs.rc_version }}"
+            git push
+          fi
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

@@ -11,13 +11,21 @@ fi
 
 workdir="$(pwd)"
 base_url="https://cdn.kernel.org/pub/linux/kernel/v${rc_version%%.*}.x"
-archive="linux-${rc_version}.tar.xz"
 
 if [[ "${rc_version}" == *-rc* ]]; then
-  base_url="${base_url}/testing"
+  archive="linux-${rc_version}.tar.gz"
+  archive_url="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/snapshot/${archive}"
+else
+  archive="linux-${rc_version}.tar.xz"
+  archive_url="${base_url}/${archive}"
 fi
 
-curl -fsSLO "${base_url}/${archive}"
+curl -fsSLo "${archive}" -L "${archive_url}"
+if [[ ! -s "${archive}" ]]; then
+  echo "Download failed or empty archive: ${archive_url}" >&2
+  exit 1
+fi
+
 tar -xf "${archive}"
 cd "linux-${rc_version}"
 

@@ -13,6 +13,10 @@ workdir="$(pwd)"
 base_url="https://cdn.kernel.org/pub/linux/kernel/v${rc_version%%.*}.x"
 archive="linux-${rc_version}.tar.xz"
 
+if [[ "${rc_version}" == *-rc* ]]; then
+  base_url="${base_url}/testing"
+fi
+
 curl -fsSLO "${base_url}/${archive}"
 tar -xf "${archive}"
 cd "linux-${rc_version}"

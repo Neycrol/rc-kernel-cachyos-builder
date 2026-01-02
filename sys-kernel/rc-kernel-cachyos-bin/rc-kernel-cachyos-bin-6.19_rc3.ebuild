@@ -13,8 +13,18 @@ BDEPEND="app-arch/zstd"
 
 S="${WORKDIR}"
 
+src_unpack() {
+  unpack "${A}"
+
+  local bundle="linux-${MY_PV}-cachyos-rc"
+  if [[ ! -d "${WORKDIR}/${bundle}" ]]; then
+    tar -I zstd -xf "${DISTDIR}/${P}.tar.zst" -C "${WORKDIR}" || die
+  fi
+}
+
 src_install() {
   local bundle="linux-${MY_PV}-cachyos-rc"
+  local lib_src="${WORKDIR}/${bundle}/lib"
 
   if [[ ! -d "${WORKDIR}/${bundle}" ]]; then
     die "Bundle directory not found: ${bundle}"
@@ -22,7 +32,14 @@ src_install() {
 
   dodir /boot /lib
   cp -a "${WORKDIR}/${bundle}/boot/." "${ED}/boot/" || die
-  cp -a "${WORKDIR}/${bundle}/lib/." "${ED}/lib/" || die
+
+  if [[ -d "${lib_src}/modules" ]]; then
+    cp -a "${lib_src}/." "${ED}/lib/" || die
+  elif [[ -d "${lib_src}/lib/modules" ]]; then
+    cp -a "${lib_src}/lib/." "${ED}/lib/" || die
+  else
+    die "Modules directory not found under ${lib_src}"
+  fi
 }
 
 pkg_postinst() {

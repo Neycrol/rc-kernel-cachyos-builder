@@ -62,6 +62,6 @@ cp "${out}/System.map" "${bundle_dir}/boot/System.map-${kver}"
 cp "${out}/config" "${bundle_dir}/boot/config-${kver}"
 cp "${out}/vmlinux" "${bundle_dir}/boot/vmlinux-${kver}"
 cp "${out}/kernel-release" "${bundle_dir}/boot/kernel-release-${kver}"
-cp -a "${workdir}/modules/lib" "${bundle_dir}/lib"
+cp -a "${workdir}/modules/lib/modules" "${bundle_dir}/lib/"
 
 tar -I 'zstd -T0 -19' -cf "${out}/linux-${rc_version}${local_version}.tar.zst" -C "${out}" "linux-${rc_version}${local_version}"

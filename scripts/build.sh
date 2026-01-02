@@ -29,14 +29,14 @@ fi
 tar -xf "${archive}"
 cd "linux-${rc_version}"
 
-"${workdir}/scripts/apply-cachyos.sh" "${rc_major}"
+bash "${workdir}/scripts/apply-cachyos.sh" "${rc_major}"
 
 base_config="${workdir}/configs/base.config"
 if [[ ! -f "${base_config}" && -d "${workdir}/configs/base.config.d" ]]; then
   cat "${workdir}/configs/base.config.d"/part-* > "${base_config}"
 fi
 
-"${workdir}/scripts/apply-config.sh" "${workdir}/configs/base.config" "${workdir}/configs/perf.config"
+bash "${workdir}/scripts/apply-config.sh" "${workdir}/configs/base.config" "${workdir}/configs/perf.config"
 
 march_flags="${MARCH_FLAGS:--march=icelake-client -mtune=icelake-client}"
 local_version="${LOCALVERSION:--cachyos-rc}"

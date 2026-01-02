@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-rc_version="$({
-  curl -fsSL https://www.kernel.org/releases.json | python3 - <<'PY'
+rc_version="$(
+  python3 - <<'PY'
 import json
-import sys
+import urllib.request
 
-data = json.load(sys.stdin)
+with urllib.request.urlopen("https://www.kernel.org/releases.json") as resp:
+    data = json.load(resp)
+
 for rel in data.get("releases", []):
     if rel.get("moniker") == "mainline":
         print(rel.get("version"))
         raise SystemExit(0)
 raise SystemExit("mainline release not found")
 PY
-} )"
+)"
 
 if [[ "${rc_version}" != *-rc* ]]; then
   echo "mainline is not an RC release: ${rc_version}" >&2

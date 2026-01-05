@@ -70,6 +70,67 @@ apply_url_allow_applied() {
   apply_patch_file "${patch_file}" "${name}"
 }
 
+list_patch_urls() {
+  local path="$1"
+
+  python3 - "$path" <<'PY'
+import json
+import os
+import re
+import sys
+import urllib.request
+
+path = sys.argv[1]
+url = f"https://api.github.com/repos/CachyOS/kernel-patches/contents/{path}"
+req = urllib.request.Request(url, headers={"User-Agent": "rc-kernel-cachyos-builder"})
+token = os.environ.get("GITHUB_TOKEN")
+if token:
+    req.add_header("Authorization", f"token {token}")
+try:
+    with urllib.request.urlopen(req) as resp:
+        data = json.load(resp)
+except Exception as exc:
+    print(f"Failed to query {url}: {exc}", file=sys.stderr)
+    sys.exit(2)
+
+rx = re.compile(r"^\d{4}.*\.patch$")
+files = []
+for item in data:
+    if item.get("type") != "file":
+        continue
+    name = item.get("name", "")
+    if rx.match(name):
+        files.append((name, item.get("download_url", "")))
+
+for name, download_url in sorted(files, key=lambda item: item[0]):
+    if download_url:
+        print(download_url)
+PY
+}
+
+apply_patch_series() {
+  local path="$1"
+  local urls
+
+  if ! urls="$(list_patch_urls "${path}")"; then
+    echo "Failed to query patch list at ${path}" >&2
+    exit 1
+  fi
+
+  if [[ -z "${urls}" ]]; then
+    return 1
+  fi
+
+  echo "Applying CachyOS patch series from ${path}"
+  while IFS= read -r url; do
+    [[ -z "${url}" ]] && continue
+    local name="${url##*/}"
+    name="${name%.patch}"
+    apply_url_allow_applied "${url}" "${name}"
+  done <<< "${urls}"
+  return 0
+}
+
 resolve_patch_url() {
   local path="$1"
   shift
@@ -130,10 +191,12 @@ require_patch_url() {
   fi
 
   echo "Resolved ${name} -> ${url}"
-  apply_url "${url}" "${name}"
+  apply_url_allow_applied "${url}" "${name}"
 }
 
-require_patch_url "${major}/all" "cachyos-base" 'cachyos-base.*\.patch$'
+if ! apply_patch_series "${major}"; then
+  require_patch_url "${major}/all" "cachyos-base" 'cachyos-base.*\.patch$'
+fi
 
 if ! require_patch_url "${major}/sched" "bore-sched" 'bore-cachy.*\.patch$' 'bore.*\.patch$'; then
   exit 1

@@ -26,7 +26,7 @@ fi
 archive=""
 for url in "${urls[@]}"; do
   filename="${url##*/}"
-  if curl -fsSLo "${filename}" -L --retry 3 --retry-connrefused --retry-delay 5; then
+  if curl -fsSLo "${filename}" -L --retry 3 --retry-connrefused --retry-delay 5 "${url}"; then
     archive="${filename}"
     break
   fi

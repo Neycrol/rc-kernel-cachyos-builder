@@ -214,7 +214,13 @@ require_patch_url() {
   fi
 
   echo "Resolved ${name} -> ${url}"
-  apply_url_allow_applied "${url}" "${name}"
+  local filename="${url##*/}"
+  local local_patch="${local_patch_dir}/${filename}"
+  if [[ -f "${local_patch}" ]]; then
+    apply_file_allow_applied "${local_patch}" "${name}"
+  else
+    apply_url_allow_applied "${url}" "${name}"
+  fi
 }
 
 if ! apply_patch_series "${major}"; then

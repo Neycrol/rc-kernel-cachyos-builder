@@ -12,6 +12,10 @@ if [[ ! -f Makefile ]]; then
   exit 1
 fi
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/.." && pwd)"
+local_patch_dir="${repo_root}/patches/${major}"
+
 tmp_dir="$(mktemp -d)"
 cleanup() {
   rm -rf "${tmp_dir}"
@@ -61,6 +65,20 @@ apply_url_allow_applied() {
 
   echo "Applying ${name}"
   curl -fsSL "${url}" -o "${patch_file}"
+
+  if patch -p1 --reverse --dry-run --batch --no-backup-if-mismatch < "${patch_file}" >/dev/null 2>&1; then
+    echo "Patch ${name} already applied, skipping."
+    return 0
+  fi
+
+  apply_patch_file "${patch_file}" "${name}"
+}
+
+apply_file_allow_applied() {
+  local patch_file="$1"
+  local name="$2"
+
+  echo "Applying ${name} (local override)"
 
   if patch -p1 --reverse --dry-run --batch --no-backup-if-mismatch < "${patch_file}" >/dev/null 2>&1; then
     echo "Patch ${name} already applied, skipping."
@@ -124,9 +142,14 @@ apply_patch_series() {
   echo "Applying CachyOS patch series from ${path}"
   while IFS= read -r url; do
     [[ -z "${url}" ]] && continue
-    local name="${url##*/}"
-    name="${name%.patch}"
-    apply_url_allow_applied "${url}" "${name}"
+    local filename="${url##*/}"
+    local name="${filename%.patch}"
+    local local_patch="${local_patch_dir}/${filename}"
+    if [[ -f "${local_patch}" ]]; then
+      apply_file_allow_applied "${local_patch}" "${name}"
+    else
+      apply_url_allow_applied "${url}" "${name}"
+    fi
   done <<< "${urls}"
   return 0
 }

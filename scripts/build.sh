@@ -11,18 +11,30 @@ fi
 
 workdir="$(pwd)"
 base_url="https://cdn.kernel.org/pub/linux/kernel/v${rc_version%%.*}.x"
+archive_base="linux-${rc_version}"
 
+declare -a urls=()
 if [[ "${rc_version}" == *-rc* ]]; then
-  archive="linux-${rc_version}.tar.gz"
-  archive_url="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/snapshot/${archive}"
+  urls+=("https://cdn.kernel.org/pub/linux/kernel/v${rc_version%%.*}.x/testing/${archive_base}.tar.xz")
+  urls+=("https://mirrors.edge.kernel.org/pub/linux/kernel/v${rc_version%%.*}.x/testing/${archive_base}.tar.xz")
+  urls+=("https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/snapshot/${archive_base}.tar.gz")
 else
-  archive="linux-${rc_version}.tar.xz"
-  archive_url="${base_url}/${archive}"
+  urls+=("${base_url}/${archive_base}.tar.xz")
+  urls+=("https://mirrors.edge.kernel.org/pub/linux/kernel/v${rc_version%%.*}.x/${archive_base}.tar.xz")
 fi
 
-curl -fsSLo "${archive}" -L "${archive_url}"
-if [[ ! -s "${archive}" ]]; then
-  echo "Download failed or empty archive: ${archive_url}" >&2
+archive=""
+for url in "${urls[@]}"; do
+  filename="${url##*/}"
+  if curl -fsSLo "${filename}" -L --retry 3 --retry-connrefused --retry-delay 5; then
+    archive="${filename}"
+    break
+  fi
+done
+
+if [[ -z "${archive}" || ! -s "${archive}" ]]; then
+  echo "Download failed for all sources:" >&2
+  printf '  - %s\n' "${urls[@]}" >&2
   exit 1
 fi
 

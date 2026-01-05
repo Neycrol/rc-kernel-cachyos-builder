@@ -19,6 +19,7 @@ jobs:
     env:
       MARCH_FLAGS: "-march=icelake-client -mtune=icelake-client"
       LOCALVERSION: "-cachyos-rc"
+      STRICT_PATCH: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

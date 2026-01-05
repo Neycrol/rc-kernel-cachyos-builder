@@ -40,7 +40,6 @@ index db2cb06aa8cf..bebde469f81a 100644
  {
  	struct mm_struct *mm = current->mm;
  
-}
 
 diff --git a/arch/riscv/include/asm/sync_core.h b/arch/riscv/include/asm/sync_core.h
 index 9153016da8f1..2fe6b7fe6b12 100644

@@ -16,16 +16,13 @@ Signed-off-by: Peter Jung <admin@ptr1337.dev>
  .../amd/display/amdgpu_dm/amdgpu_dm_helpers.c |  1 +
  .../amd/display/include/ddc_service_types.h   |  1 +
  drivers/gpu/drm/i915/gt/intel_rc6.c           | 13 +++++++++-
- drivers/net/wireless/intel/iwlwifi/mld/ptp.c  |  7 ++++++
- drivers/net/wireless/intel/iwlwifi/mvm/ptp.c  |  7 ++++++
- .../wireless/mediatek/mt76/mt76_connac_mcu.c  |  7 ++++--
  include/linux/perf_event.h                    |  2 +-
  include/linux/sched/mm.h                      | 10 ++++----
  include/linux/tick.h                          |  4 ++--
  include/linux/vtime.h                         |  8 +++----
  kernel/sched/core.c                           | 19 ++++++---------
  kernel/sched/sched.h                          | 24 +++++++++++--------
- 20 files changed, 99 insertions(+), 64 deletions(-)
+ 17 files changed, 80 insertions(+), 63 deletions(-)
 
 diff --git a/arch/arm/include/asm/mmu_context.h b/arch/arm/include/asm/mmu_context.h
 index db2cb06aa8cf..bebde469f81a 100644

@@ -18,6 +18,32 @@ cleanup() {
 }
 trap cleanup EXIT
 
+strict_patch="${STRICT_PATCH:-0}"
+
+apply_patch_file() {
+  local patch_file="$1"
+  local name="$2"
+  local reject_file="${tmp_dir}/${name}.rej"
+
+  rm -f "${reject_file}"
+  if patch -p1 --forward --batch --no-backup-if-mismatch --reject-file "${reject_file}" < "${patch_file}"; then
+    rm -f "${reject_file}"
+    return 0
+  fi
+
+  if [[ -s "${reject_file}" ]]; then
+    echo "Patch ${name} had rejects (saved to ${reject_file})." >&2
+  else
+    echo "Patch ${name} failed to apply." >&2
+  fi
+
+  if [[ "${strict_patch}" == "1" ]]; then
+    exit 1
+  fi
+
+  return 0
+}
+
 apply_url() {
   local url="$1"
   local name="$2"
@@ -25,7 +51,7 @@ apply_url() {
 
   echo "Applying ${name}"
   curl -fsSL "${url}" -o "${patch_file}"
-  patch -p1 --forward < "${patch_file}"
+  apply_patch_file "${patch_file}" "${name}"
 }
 
 apply_url_allow_applied() {
@@ -36,12 +62,12 @@ apply_url_allow_applied() {
   echo "Applying ${name}"
   curl -fsSL "${url}" -o "${patch_file}"
 
-  if patch -p1 --reverse --dry-run < "${patch_file}" >/dev/null 2>&1; then
+  if patch -p1 --reverse --dry-run --batch --no-backup-if-mismatch < "${patch_file}" >/dev/null 2>&1; then
     echo "Patch ${name} already applied, skipping."
     return 0
   fi
 
-  patch -p1 --forward < "${patch_file}"
+  apply_patch_file "${patch_file}" "${name}"
 }
 
 resolve_patch_url() {

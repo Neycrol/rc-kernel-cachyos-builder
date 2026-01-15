@@ -54,7 +54,7 @@ apply_url() {
   local patch_file="${tmp_dir}/${name}.patch"
 
   echo "Applying ${name}"
-  curl -fsSL "${url}" -o "${patch_file}"
+  curl -fsSL --retry 3 --retry-connrefused --retry-delay 5 --max-time 60 "${url}" -o "${patch_file}"
   apply_patch_file "${patch_file}" "${name}"
 }
 
@@ -64,7 +64,7 @@ apply_url_allow_applied() {
   local patch_file="${tmp_dir}/${name}.patch"
 
   echo "Applying ${name}"
-  curl -fsSL "${url}" -o "${patch_file}"
+  curl -fsSL --retry 3 --retry-connrefused --retry-delay 5 --max-time 60 "${url}" -o "${patch_file}"
 
   if patch -p1 --reverse --dry-run --batch --no-backup-if-mismatch < "${patch_file}" >/dev/null 2>&1; then
     echo "Patch ${name} already applied, skipping."
@@ -105,7 +105,7 @@ token = os.environ.get("GITHUB_TOKEN")
 if token:
     req.add_header("Authorization", f"token {token}")
 try:
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.load(resp)
 except Exception as exc:
     print(f"Failed to query {url}: {exc}", file=sys.stderr)
@@ -173,7 +173,7 @@ token = os.environ.get("GITHUB_TOKEN")
 if token:
     req.add_header("Authorization", f"token {token}")
 try:
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=30) as resp:
         data = json.load(resp)
 except Exception as exc:
     print(f"Failed to query {url}: {exc}", file=sys.stderr)

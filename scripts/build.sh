@@ -86,7 +86,29 @@ if ! command -v gpg >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! gpg --verify "${signature_file}" "${archive}" >/dev/null 2>&1; then
+if [[ -z "${KERNEL_GPG_KEYRING:-}" ]]; then
+  KERNEL_GPG_KEYRING="${workdir}/.gnupg-kernel"
+  mkdir -p "${KERNEL_GPG_KEYRING}"
+  chmod 700 "${KERNEL_GPG_KEYRING}"
+fi
+
+keyring_opt=(--homedir "${KERNEL_GPG_KEYRING}")
+if ! gpg "${keyring_opt[@]}" --list-keys >/dev/null 2>&1; then
+  echo "Initializing GPG keyring at ${KERNEL_GPG_KEYRING}" >&2
+  gpg "${keyring_opt[@]}" --batch --list-keys >/dev/null 2>&1 || true
+fi
+
+kernel_keys_url="${KERNEL_KEYS_URL:-https://www.kernel.org/signature.html}"
+if ! gpg "${keyring_opt[@]}" --list-keys 38DBBDC86092693E >/dev/null 2>&1; then
+  if curl -fsSL "${kernel_keys_url}" | gpg "${keyring_opt[@]}" --batch --import >/dev/null 2>&1; then
+    : # imported
+  else
+    echo "Failed to import kernel.org signing keys from ${kernel_keys_url}" >&2
+    exit 1
+  fi
+fi
+
+if ! gpg "${keyring_opt[@]}" --verify "${signature_file}" "${archive}" >/dev/null 2>&1; then
   echo "Signature verification failed for ${archive} with ${signature_file}" >&2
   exit 1
 fi

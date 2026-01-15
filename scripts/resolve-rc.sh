@@ -4,10 +4,36 @@ set -euo pipefail
 rc_version="$(
   python3 - <<'PY'
 import json
+import os
+from pathlib import Path
+import sys
 import urllib.request
+import urllib.error
 
-with urllib.request.urlopen("https://www.kernel.org/releases.json") as resp:
-    data = json.load(resp)
+url = "https://www.kernel.org/releases.json"
+timeout = 30
+cache_path = Path(os.environ.get("KERNEL_RELEASES_CACHE", "scripts/releases.json"))
+
+def load_data(path):
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+try:
+    with urllib.request.urlopen(url, timeout=timeout) as resp:
+        data = json.load(resp)
+except (urllib.error.URLError, TimeoutError) as exc:
+    print(
+        f"Failed to fetch {url} within {timeout}s: {exc}",
+        file=sys.stderr,
+    )
+    if cache_path.exists():
+        print(f"Using cached releases data from {cache_path}.", file=sys.stderr)
+        data = load_data(cache_path)
+    else:
+        raise SystemExit(
+            "Unable to fetch releases.json; please retry or provide cache via "
+            "KERNEL_RELEASES_CACHE."
+        )
 
 for rel in data.get("releases", []):
     if rel.get("moniker") == "mainline":

@@ -59,7 +59,7 @@ if [[ -z "${sha256_file}" || ! -s "${sha256_file}" ]]; then
   exit 1
 fi
 
-signature_file="${archive}.sign"
+signature_file="${archive%.tar.xz}.tar.sign"
 if ! curl -fsSLo "${signature_file}" -L --retry 3 --retry-connrefused --retry-delay 5 "${download_dir}/${signature_file}"; then
   echo "Failed to download signature file ${signature_file} from ${download_dir}" >&2
   exit 1

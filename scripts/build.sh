@@ -24,10 +24,12 @@ else
 fi
 
 archive=""
+download_url=""
 for url in "${urls[@]}"; do
   filename="${url##*/}"
   if curl -fsSLo "${filename}" -L --retry 3 --retry-connrefused --retry-delay 5 "${url}"; then
     archive="${filename}"
+    download_url="${url}"
     break
   fi
 done
@@ -35,6 +37,79 @@ done
 if [[ -z "${archive}" || ! -s "${archive}" ]]; then
   echo "Download failed for all sources:" >&2
   printf '  - %s\n' "${urls[@]}" >&2
+  exit 1
+fi
+
+if [[ "${archive}" != *.tar.xz ]]; then
+  echo "Unsupported archive format for verification: ${archive}" >&2
+  exit 1
+fi
+
+download_dir="${download_url%/*}"
+sha256_file=""
+for sums_name in sha256sums.asc sha256sums; do
+  if curl -fsSLo "${sums_name}" -L --retry 3 --retry-connrefused --retry-delay 5 "${download_dir}/${sums_name}"; then
+    sha256_file="${sums_name}"
+    break
+  fi
+done
+
+if [[ -z "${sha256_file}" || ! -s "${sha256_file}" ]]; then
+  echo "Failed to download sha256sums.asc or sha256sums from ${download_dir}" >&2
+  exit 1
+fi
+
+signature_file="${archive%.tar.xz}.tar.sign"
+if ! curl -fsSLo "${signature_file}" -L --retry 3 --retry-connrefused --retry-delay 5 "${download_dir}/${signature_file}"; then
+  echo "Failed to download signature file ${signature_file} from ${download_dir}" >&2
+  exit 1
+fi
+
+sha256_input="${sha256_file}"
+if [[ "${sha256_file}" == *.asc ]]; then
+  sha256_input="sha256sums.extracted"
+  awk '/^[0-9a-fA-F]{64} / {print}' "${sha256_file}" > "${sha256_input}"
+fi
+
+if ! grep -q "${archive}" "${sha256_input}"; then
+  echo "Checksum entry for ${archive} not found in ${sha256_file}" >&2
+  exit 1
+fi
+
+if ! sha256sum -c "${sha256_input}" --ignore-missing; then
+  echo "Checksum verification failed for ${archive}" >&2
+  exit 1
+fi
+
+if ! command -v gpg >/dev/null 2>&1; then
+  echo "gpg is required to verify ${signature_file} but was not found in PATH" >&2
+  exit 1
+fi
+
+if [[ -z "${KERNEL_GPG_KEYRING:-}" ]]; then
+  KERNEL_GPG_KEYRING="${workdir}/.gnupg-kernel"
+  mkdir -p "${KERNEL_GPG_KEYRING}"
+  chmod 700 "${KERNEL_GPG_KEYRING}"
+fi
+
+keyring_opt=(--homedir "${KERNEL_GPG_KEYRING}")
+if ! gpg "${keyring_opt[@]}" --list-keys >/dev/null 2>&1; then
+  echo "Initializing GPG keyring at ${KERNEL_GPG_KEYRING}" >&2
+  gpg "${keyring_opt[@]}" --batch --list-keys >/dev/null 2>&1 || true
+fi
+
+kernel_keys_url="${KERNEL_KEYS_URL:-https://www.kernel.org/signature.html}"
+if ! gpg "${keyring_opt[@]}" --list-keys 38DBBDC86092693E >/dev/null 2>&1; then
+  if curl -fsSL "${kernel_keys_url}" | gpg "${keyring_opt[@]}" --batch --import >/dev/null 2>&1; then
+    : # imported
+  else
+    echo "Failed to import kernel.org signing keys from ${kernel_keys_url}" >&2
+    exit 1
+  fi
+fi
+
+if ! gpg "${keyring_opt[@]}" --verify "${signature_file}" "${archive}" >/dev/null 2>&1; then
+  echo "Signature verification failed for ${archive} with ${signature_file}" >&2
   exit 1
 fi
 

@@ -69,7 +69,7 @@ for url in "${urls[@]}"; do
       sha256_candidate="${sums_path}"
       break
     fi
-    if [[ -s "${sums_path}" ]]; then
+    if [[ -s "${sums_path}" ]] && grep -q "${archive_filename}" "${sums_path}"; then
       sha256_candidate="${sums_path}"
       break
     fi

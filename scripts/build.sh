@@ -33,7 +33,6 @@ for url in "${urls[@]}"; do
   cached_path="${cache_dir}/${filename}"
   if [[ -s "${cached_path}" ]]; then
     archive="${cached_path}"
-    download_url="${url}"
     cache_hit="1"
     break
   fi
@@ -56,24 +55,45 @@ if [[ "${archive_filename}" != *.tar.xz ]]; then
   exit 1
 fi
 
-download_dir="${download_url%/*}"
+download_dir=""
 sha256_file=""
-for sums_name in sha256sums.asc sha256sums; do
-  sums_path="${cache_dir}/${sums_name}"
-  if curl -fsSLo "${sums_path}" -L --retry 3 --retry-connrefused --retry-delay 5 "${download_dir}/${sums_name}"; then
-    sha256_file="${sums_path}"
-    break
+signature_file=""
+for url in "${urls[@]}"; do
+  candidate_dir="${url%/*}"
+  sha256_candidate=""
+  for sums_name in sha256sums.asc sha256sums; do
+    sums_path="${cache_dir}/${sums_name}"
+    if curl -fsSLo "${sums_path}" -L --retry 3 --retry-connrefused --retry-delay 5 "${candidate_dir}/${sums_name}"; then
+      sha256_candidate="${sums_path}"
+      break
+    fi
+  done
+
+  if [[ -z "${sha256_candidate}" || ! -s "${sha256_candidate}" ]]; then
+    continue
   fi
+
+  signature_candidate="${cache_dir}/${archive_filename%.tar.xz}.tar.sign"
+  if ! curl -fsSLo "${signature_candidate}" -L --retry 3 --retry-connrefused --retry-delay 5 "${candidate_dir}/${signature_candidate##*/}"; then
+    continue
+  fi
+
+  download_dir="${candidate_dir}"
+  sha256_file="${sha256_candidate}"
+  signature_file="${signature_candidate}"
+  if [[ -z "${download_url}" ]]; then
+    download_url="${candidate_dir}/${archive_filename}"
+  fi
+  break
 done
 
 if [[ -z "${sha256_file}" || ! -s "${sha256_file}" ]]; then
-  echo "Failed to download sha256sums.asc or sha256sums from ${download_dir}" >&2
+  echo "Failed to download sha256sums.asc or sha256sums from available mirrors." >&2
   exit 1
 fi
 
-signature_file="${cache_dir}/${archive_filename%.tar.xz}.tar.sign"
-if ! curl -fsSLo "${signature_file}" -L --retry 3 --retry-connrefused --retry-delay 5 "${download_dir}/${signature_file##*/}"; then
-  echo "Failed to download signature file ${signature_file##*/} from ${download_dir}" >&2
+if [[ -z "${signature_file}" || ! -s "${signature_file}" ]]; then
+  echo "Failed to download signature file ${archive_filename%.tar.xz}.tar.sign from available mirrors." >&2
   exit 1
 fi
 

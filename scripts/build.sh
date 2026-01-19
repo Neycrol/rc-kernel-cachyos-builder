@@ -86,7 +86,13 @@ if ! grep -q "${archive_filename}" "${sha256_input}"; then
   exit 1
 fi
 
-if ! (cd "${cache_dir}" && sha256sum -c "${sha256_input}" --ignore-missing); then
+checksum_line="$(grep -E "^[0-9a-fA-F]{64}  ${archive_filename}$" "${sha256_input}" || true)"
+if [[ -z "${checksum_line}" ]]; then
+  echo "Checksum entry for ${archive_filename} not found in ${sha256_input}" >&2
+  exit 1
+fi
+
+if ! (cd "${cache_dir}" && printf '%s\n' "${checksum_line}" | sha256sum -c -); then
   echo "Checksum verification failed for ${archive_filename}" >&2
   exit 1
 fi

@@ -31,15 +31,17 @@ cache_hit="0"
 for url in "${urls[@]}"; do
   filename="${url##*/}"
   cached_path="${cache_dir}/${filename}"
-  if [[ -s "${cached_path}" ]]; then
-    archive="${cached_path}"
-    cache_hit="1"
-    break
-  fi
-  if curl -fsSLo "${cached_path}" -L --retry 3 --retry-connrefused --retry-delay 5 "${url}"; then
-    archive="${cached_path}"
-    download_url="${url}"
-    break
+  if [[ "${filename}" == *.tar.xz ]]; then
+    if [[ -s "${cached_path}" ]]; then
+      archive="${cached_path}"
+      cache_hit="1"
+      break
+    fi
+    if curl -fsSLo "${cached_path}" -L --retry 3 --retry-connrefused --retry-delay 5 "${url}"; then
+      archive="${cached_path}"
+      download_url="${url}"
+      break
+    fi
   fi
 done
 
@@ -67,6 +69,10 @@ for url in "${urls[@]}"; do
       sha256_candidate="${sums_path}"
       break
     fi
+    if [[ -s "${sums_path}" ]]; then
+      sha256_candidate="${sums_path}"
+      break
+    fi
   done
 
   if [[ -z "${sha256_candidate}" || ! -s "${sha256_candidate}" ]]; then
@@ -75,7 +81,9 @@ for url in "${urls[@]}"; do
 
   signature_candidate="${cache_dir}/${archive_filename%.tar.xz}.tar.sign"
   if ! curl -fsSLo "${signature_candidate}" -L --retry 3 --retry-connrefused --retry-delay 5 "${candidate_dir}/${signature_candidate##*/}"; then
-    continue
+    if [[ ! -s "${signature_candidate}" ]]; then
+      continue
+    fi
   fi
 
   download_dir="${candidate_dir}"

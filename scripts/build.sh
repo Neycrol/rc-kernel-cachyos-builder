@@ -27,12 +27,14 @@ fi
 
 archive=""
 download_url=""
+cache_hit="0"
 for url in "${urls[@]}"; do
   filename="${url##*/}"
   cached_path="${cache_dir}/${filename}"
   if [[ -s "${cached_path}" ]]; then
     archive="${cached_path}"
     download_url="${url}"
+    cache_hit="1"
     break
   fi
   if curl -fsSLo "${cached_path}" -L --retry 3 --retry-connrefused --retry-delay 5 "${url}"; then
@@ -81,20 +83,39 @@ if [[ "${sha256_file}" == *.asc ]]; then
   awk '/^[0-9a-fA-F]{64} / {print}' "${sha256_file}" > "${sha256_input}"
 fi
 
-if ! grep -q "${archive_filename}" "${sha256_input}"; then
-  echo "Checksum entry for ${archive_filename} not found in ${sha256_file}" >&2
-  exit 1
-fi
+verify_checksum() {
+  if ! grep -q "${archive_filename}" "${sha256_input}"; then
+    echo "Checksum entry for ${archive_filename} not found in ${sha256_file}" >&2
+    return 1
+  fi
 
-checksum_line="$(grep -E "^[0-9a-fA-F]{64}  ${archive_filename}$" "${sha256_input}" || true)"
-if [[ -z "${checksum_line}" ]]; then
-  echo "Checksum entry for ${archive_filename} not found in ${sha256_input}" >&2
-  exit 1
-fi
+  local checksum_line
+  checksum_line="$(grep -E "^[0-9a-fA-F]{64}  ${archive_filename}$" "${sha256_input}" || true)"
+  if [[ -z "${checksum_line}" ]]; then
+    echo "Checksum entry for ${archive_filename} not found in ${sha256_input}" >&2
+    return 1
+  fi
 
-if ! (cd "${cache_dir}" && printf '%s\n' "${checksum_line}" | sha256sum -c -); then
-  echo "Checksum verification failed for ${archive_filename}" >&2
-  exit 1
+  (cd "${cache_dir}" && printf '%s\n' "${checksum_line}" | sha256sum -c -)
+}
+
+if ! verify_checksum; then
+  if [[ "${cache_hit}" == "1" ]]; then
+    echo "Cached archive failed checksum; re-downloading ${archive_filename}." >&2
+    rm -f "${archive}"
+    cache_hit="0"
+    if ! curl -fsSLo "${archive}" -L --retry 3 --retry-connrefused --retry-delay 5 "${download_url}"; then
+      echo "Failed to re-download ${archive_filename} from ${download_url}" >&2
+      exit 1
+    fi
+    if ! verify_checksum; then
+      echo "Checksum verification failed for ${archive_filename}" >&2
+      exit 1
+    fi
+  else
+    echo "Checksum verification failed for ${archive_filename}" >&2
+    exit 1
+  fi
 fi
 
 if ! command -v gpg >/dev/null 2>&1; then

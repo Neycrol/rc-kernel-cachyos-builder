@@ -20,8 +20,8 @@ jobs:
       MARCH_FLAGS: "-march=icelake-client -mtune=icelake-client"
       LOCALVERSION: "-cachyos-rc"
       STRICT_PATCH: "1"
-      CCACHE_DIR: ~/.ccache
-      KERNEL_CACHE_DIR: ~/.cache/rc-kernel-cachyos
+      CCACHE_DIR: ${{ env.HOME }}/.ccache
+      KERNEL_CACHE_DIR: ${{ env.HOME }}/.cache/rc-kernel-cachyos
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,8 +35,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.ccache
-            ~/.cache/rc-kernel-cachyos
+            ${{ env.HOME }}/.ccache
+            ${{ env.HOME }}/.cache/rc-kernel-cachyos
             scripts/releases.json
           key: ${{ runner.os }}-kernel-cache-${{ steps.rc.outputs.rc_version }}
           restore-keys: |

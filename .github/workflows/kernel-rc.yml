@@ -20,6 +20,8 @@ jobs:
       MARCH_FLAGS: "-march=icelake-client -mtune=icelake-client"
       LOCALVERSION: "-cachyos-rc"
       STRICT_PATCH: "1"
+      CCACHE_DIR: ${{ runner.temp }}/ccache
+      KERNEL_CACHE_DIR: ${{ runner.temp }}/kernel-cache
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,6 +29,18 @@ jobs:
       - name: Resolve latest RC
         id: rc
         run: bash scripts/resolve-rc.sh
+
+      - name: Cache kernel sources and ccache
+        if: steps.rc.outputs.is_rc == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/ccache
+            ${{ runner.temp }}/kernel-cache
+            scripts/releases.json
+          key: ${{ runner.os }}-kernel-cache-${{ steps.rc.outputs.rc_version }}
+          restore-keys: |
+            ${{ runner.os }}-kernel-cache-
 
       - name: Decide whether to build
         id: release
@@ -103,13 +117,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential bc bison flex libssl-dev libelf-dev dwarves \
-            zstd rsync curl xz-utils python3 \
+            zstd rsync curl xz-utils python3 ccache \
             binutils-dev libxxhash-dev zlib1g-dev
+
+      - name: Configure ccache
+        if: steps.rc.outputs.is_rc == 'true' && steps.release.outputs.should_build == 'true'
+        run: |
+          ccache --version
+          ccache -M 5G
+          ccache -z
 
       - name: Build kernel
         if: steps.rc.outputs.is_rc == 'true' && steps.release.outputs.should_build == 'true'
         run: |
           bash scripts/build.sh "${{ steps.rc.outputs.rc_version }}" "${{ steps.rc.outputs.rc_major }}"
+
+      - name: Show ccache stats
+        if: steps.rc.outputs.is_rc == 'true' && steps.release.outputs.should_build == 'true'
+        run: |
+          ccache --show-stats
 
       - name: Publish release
         if: steps.rc.outputs.is_rc == 'true' && steps.release.outputs.should_build == 'true'

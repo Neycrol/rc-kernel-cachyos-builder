@@ -10,6 +10,8 @@ if [[ -z "${rc_version}" || -z "${rc_major}" ]]; then
 fi
 
 workdir="$(pwd)"
+cache_dir="${KERNEL_CACHE_DIR:-${HOME}/.cache/rc-kernel-cachyos}"
+mkdir -p "${cache_dir}"
 base_url="https://cdn.kernel.org/pub/linux/kernel/v${rc_version%%.*}.x"
 archive_base="linux-${rc_version}"
 
@@ -25,12 +27,21 @@ fi
 
 archive=""
 download_url=""
+cache_hit="0"
 for url in "${urls[@]}"; do
   filename="${url##*/}"
-  if curl -fsSLo "${filename}" -L --retry 3 --retry-connrefused --retry-delay 5 "${url}"; then
-    archive="${filename}"
-    download_url="${url}"
-    break
+  cached_path="${cache_dir}/${filename}"
+  if [[ "${filename}" == *.tar.xz ]]; then
+    if [[ -s "${cached_path}" ]]; then
+      archive="${cached_path}"
+      cache_hit="1"
+      break
+    fi
+    if curl -fsSLo "${cached_path}" -L --retry 3 --retry-connrefused --retry-delay 5 "${url}"; then
+      archive="${cached_path}"
+      download_url="${url}"
+      break
+    fi
   fi
 done
 
@@ -40,45 +51,99 @@ if [[ -z "${archive}" || ! -s "${archive}" ]]; then
   exit 1
 fi
 
-if [[ "${archive}" != *.tar.xz ]]; then
+archive_filename="${archive##*/}"
+if [[ "${archive_filename}" != *.tar.xz ]]; then
   echo "Unsupported archive format for verification: ${archive}" >&2
   exit 1
 fi
 
-download_dir="${download_url%/*}"
+download_dir=""
 sha256_file=""
-for sums_name in sha256sums.asc sha256sums; do
-  if curl -fsSLo "${sums_name}" -L --retry 3 --retry-connrefused --retry-delay 5 "${download_dir}/${sums_name}"; then
-    sha256_file="${sums_name}"
-    break
+signature_file=""
+for url in "${urls[@]}"; do
+  candidate_dir="${url%/*}"
+  sha256_candidate=""
+  for sums_name in sha256sums.asc sha256sums; do
+    sums_path="${cache_dir}/${sums_name}"
+    if curl -fsSLo "${sums_path}" -L --retry 3 --retry-connrefused --retry-delay 5 "${candidate_dir}/${sums_name}"; then
+      sha256_candidate="${sums_path}"
+      break
+    fi
+    if [[ -s "${sums_path}" ]] && grep -q "${archive_filename}" "${sums_path}"; then
+      sha256_candidate="${sums_path}"
+      break
+    fi
+  done
+
+  if [[ -z "${sha256_candidate}" || ! -s "${sha256_candidate}" ]]; then
+    continue
   fi
+
+  signature_candidate="${cache_dir}/${archive_filename%.tar.xz}.tar.sign"
+  if ! curl -fsSLo "${signature_candidate}" -L --retry 3 --retry-connrefused --retry-delay 5 "${candidate_dir}/${signature_candidate##*/}"; then
+    if [[ ! -s "${signature_candidate}" ]]; then
+      continue
+    fi
+  fi
+
+  download_dir="${candidate_dir}"
+  sha256_file="${sha256_candidate}"
+  signature_file="${signature_candidate}"
+  if [[ -z "${download_url}" ]]; then
+    download_url="${candidate_dir}/${archive_filename}"
+  fi
+  break
 done
 
 if [[ -z "${sha256_file}" || ! -s "${sha256_file}" ]]; then
-  echo "Failed to download sha256sums.asc or sha256sums from ${download_dir}" >&2
+  echo "Failed to download sha256sums.asc or sha256sums from available mirrors." >&2
   exit 1
 fi
 
-signature_file="${archive%.tar.xz}.tar.sign"
-if ! curl -fsSLo "${signature_file}" -L --retry 3 --retry-connrefused --retry-delay 5 "${download_dir}/${signature_file}"; then
-  echo "Failed to download signature file ${signature_file} from ${download_dir}" >&2
+if [[ -z "${signature_file}" || ! -s "${signature_file}" ]]; then
+  echo "Failed to download signature file ${archive_filename%.tar.xz}.tar.sign from available mirrors." >&2
   exit 1
 fi
 
 sha256_input="${sha256_file}"
 if [[ "${sha256_file}" == *.asc ]]; then
-  sha256_input="sha256sums.extracted"
+  sha256_input="${cache_dir}/sha256sums.extracted"
   awk '/^[0-9a-fA-F]{64} / {print}' "${sha256_file}" > "${sha256_input}"
 fi
 
-if ! grep -q "${archive}" "${sha256_input}"; then
-  echo "Checksum entry for ${archive} not found in ${sha256_file}" >&2
-  exit 1
-fi
+verify_checksum() {
+  if ! grep -q "${archive_filename}" "${sha256_input}"; then
+    echo "Checksum entry for ${archive_filename} not found in ${sha256_file}" >&2
+    return 1
+  fi
 
-if ! sha256sum -c "${sha256_input}" --ignore-missing; then
-  echo "Checksum verification failed for ${archive}" >&2
-  exit 1
+  local checksum_line
+  checksum_line="$(grep -E "^[0-9a-fA-F]{64}  ${archive_filename}$" "${sha256_input}" || true)"
+  if [[ -z "${checksum_line}" ]]; then
+    echo "Checksum entry for ${archive_filename} not found in ${sha256_input}" >&2
+    return 1
+  fi
+
+  (cd "${cache_dir}" && printf '%s\n' "${checksum_line}" | sha256sum -c -)
+}
+
+if ! verify_checksum; then
+  if [[ "${cache_hit}" == "1" ]]; then
+    echo "Cached archive failed checksum; re-downloading ${archive_filename}." >&2
+    rm -f "${archive}"
+    cache_hit="0"
+    if ! curl -fsSLo "${archive}" -L --retry 3 --retry-connrefused --retry-delay 5 "${download_url}"; then
+      echo "Failed to re-download ${archive_filename} from ${download_url}" >&2
+      exit 1
+    fi
+    if ! verify_checksum; then
+      echo "Checksum verification failed for ${archive_filename}" >&2
+      exit 1
+    fi
+  else
+    echo "Checksum verification failed for ${archive_filename}" >&2
+    exit 1
+  fi
 fi
 
 if ! command -v gpg >/dev/null 2>&1; then
@@ -109,8 +174,15 @@ if ! gpg "${keyring_opt[@]}" --list-keys 38DBBDC86092693E >/dev/null 2>&1; then
 fi
 
 if ! gpg "${keyring_opt[@]}" --verify "${signature_file}" "${archive}" >/dev/null 2>&1; then
-  echo "Signature verification failed for ${archive} with ${signature_file}" >&2
+  echo "Signature verification failed for ${archive_filename} with ${signature_file}" >&2
   exit 1
+fi
+
+if command -v ccache >/dev/null 2>&1 && [[ -z "${CC:-}" ]]; then
+  export CC="ccache gcc"
+  export HOSTCC="ccache gcc"
+  export CCACHE_BASEDIR="${workdir}"
+  export CCACHE_DIR="${CCACHE_DIR:-${HOME}/.ccache}"
 fi
 
 tar -xf "${archive}"

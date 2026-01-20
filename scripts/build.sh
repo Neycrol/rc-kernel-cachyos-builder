@@ -60,16 +60,29 @@ fi
 download_dir=""
 sha256_file=""
 signature_file=""
+download_to_cache() {
+  local url="$1"
+  local dest="$2"
+  local tmp
+
+  tmp="$(mktemp "${dest}.XXXXXX")"
+  if curl -fsSLo "${tmp}" -L --retry 3 --retry-connrefused --retry-delay 5 "${url}"; then
+    mv "${tmp}" "${dest}"
+    return 0
+  fi
+  rm -f "${tmp}"
+  return 1
+}
 for url in "${urls[@]}"; do
   candidate_dir="${url%/*}"
   sha256_candidate=""
   for sums_name in sha256sums.asc sha256sums; do
     sums_path="${cache_dir}/${sums_name}"
-    if curl -fsSLo "${sums_path}" -L --retry 3 --retry-connrefused --retry-delay 5 "${candidate_dir}/${sums_name}"; then
+    if [[ -s "${sums_path}" ]] && grep -q "${archive_filename}" "${sums_path}"; then
       sha256_candidate="${sums_path}"
       break
     fi
-    if [[ -s "${sums_path}" ]] && grep -q "${archive_filename}" "${sums_path}"; then
+    if download_to_cache "${candidate_dir}/${sums_name}" "${sums_path}"; then
       sha256_candidate="${sums_path}"
       break
     fi
@@ -80,10 +93,8 @@ for url in "${urls[@]}"; do
   fi
 
   signature_candidate="${cache_dir}/${archive_filename%.tar.xz}.tar.sign"
-  if ! curl -fsSLo "${signature_candidate}" -L --retry 3 --retry-connrefused --retry-delay 5 "${candidate_dir}/${signature_candidate##*/}"; then
-    if [[ ! -s "${signature_candidate}" ]]; then
-      continue
-    fi
+  if [[ ! -s "${signature_candidate}" ]] && ! download_to_cache "${candidate_dir}/${signature_candidate##*/}" "${signature_candidate}"; then
+    continue
   fi
 
   download_dir="${candidate_dir}"

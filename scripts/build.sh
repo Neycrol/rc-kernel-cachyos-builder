@@ -94,15 +94,11 @@ for url in "${urls[@]}"; do
   sha256_candidate=""
   for sums_name in sha256sums.asc sha256sums; do
     sums_path="${cache_dir}/${sums_name}"
-    cached_match="0"
-    if [[ -s "${sums_path}" ]] && grep -q "${archive_filename}" "${sums_path}"; then
-      cached_match="1"
-    fi
     if download_sums_with_entry "${candidate_dir}/${sums_name}" "${sums_path}" "${archive_filename}"; then
       sha256_candidate="${sums_path}"
       break
     fi
-    if [[ "${cached_match}" == "1" ]]; then
+    if [[ -s "${sums_path}" ]] && grep -q "${archive_filename}" "${sums_path}"; then
       sha256_candidate="${sums_path}"
       break
     fi

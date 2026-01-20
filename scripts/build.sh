@@ -10,7 +10,8 @@ if [[ -z "${rc_version}" || -z "${rc_major}" ]]; then
 fi
 
 workdir="$(pwd)"
-cache_dir="${KERNEL_CACHE_DIR:-${HOME}/.cache/rc-kernel-cachyos}"
+cache_root="${KERNEL_CACHE_DIR:-${HOME}/.cache/rc-kernel-cachyos}"
+cache_dir="${cache_root}/${rc_version}"
 mkdir -p "${cache_dir}"
 base_url="https://cdn.kernel.org/pub/linux/kernel/v${rc_version%%.*}.x"
 archive_base="linux-${rc_version}"

@@ -73,32 +73,16 @@ download_to_cache() {
   rm -f "${tmp}"
   return 1
 }
-download_sums_with_entry() {
-  local url="$1"
-  local dest="$2"
-  local filename="$3"
-  local tmp
-
-  tmp="$(mktemp "${dest}.XXXXXX")"
-  if curl -fsSLo "${tmp}" -L --retry 3 --retry-connrefused --retry-delay 5 "${url}"; then
-    if grep -q "${filename}" "${tmp}"; then
-      mv "${tmp}" "${dest}"
-      return 0
-    fi
-  fi
-  rm -f "${tmp}"
-  return 1
-}
 for url in "${urls[@]}"; do
   candidate_dir="${url%/*}"
   sha256_candidate=""
   for sums_name in sha256sums.asc sha256sums; do
     sums_path="${cache_dir}/${sums_name}"
-    if download_sums_with_entry "${candidate_dir}/${sums_name}" "${sums_path}" "${archive_filename}"; then
+    if [[ -s "${sums_path}" ]] && grep -q "${archive_filename}" "${sums_path}"; then
       sha256_candidate="${sums_path}"
       break
     fi
-    if [[ -s "${sums_path}" ]] && grep -q "${archive_filename}" "${sums_path}"; then
+    if download_to_cache "${candidate_dir}/${sums_name}" "${sums_path}"; then
       sha256_candidate="${sums_path}"
       break
     fi
